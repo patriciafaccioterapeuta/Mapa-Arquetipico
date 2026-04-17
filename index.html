@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Arquetípico — Interpretação do IAP</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d18; font-family: Georgia, serif; }
+  input[type=range] { -webkit-appearance: none; appearance: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #C9A84C; cursor: pointer; margin-top: -5px; }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #C9A84C; cursor: pointer; border: none; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.08); }
+  @media print {
+    body { background: #fff !important; color: #111 !important; }
+    button, .no-print { display: none !important; }
+    .card-block { break-inside: avoid; border: 1px solid #ccc !important; background: #fafafa !important; }
+    .reflection-box { border: 1px solid #ccc !important; background: #f5f5f5 !important; }
+    .practice-box   { border: 1px solid #ccc !important; background: #f5f5f5 !important; }
+    * { color: #111 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  @page { margin: 1.5cm; size: A4; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+  ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.3); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script>
+// Expose React hooks as globals
+const { useState, useRef, useEffect, createElement } = React;
+
+// ─── INJECT PRINT STYLES ONCE ────────────────────────────────────────────────
+const PRINT_STYLE = `
+@media print {
+  body { background: #fff !important; color: #111 !important; }
+  button, .no-print { display: none !important; }
+  .card-block { break-inside: avoid; border: 1px solid #ccc !important; background: #fafafa !important; }
+  .reflection-box { border: 1px solid #ccc !important; background: #f5f5f5 !important; }
+  .practice-box   { border: 1px solid #ccc !important; background: #f5f5f5 !important; }
+  svg text { fill: #222 !important; }
+  * { color: #111 !important; }
+}
+@page { margin: 1.5cm; size: A4; }
+`;
+if (typeof document !== "undefined" && !document.getElementById("iap-print-style")) {
+  const s = document.createElement("style");
+  s.id = "iap-print-style";
+  s.textContent = PRINT_STYLE;
+  document.head.appendChild(s);
+}
+
+// ─── SCALES ───────────────────────────────────────────────────────────────────
+const SCALES = {
+  84: {
+    questions: 84,
+    min: 6,
+    max: 30,
+    label: "84 questões · escala 6–30"
+  },
+  120: {
+    questions: 120,
+    min: 10,
+    max: 50,
+    label: "120 questões · escala 10–50"
+  }
+};
+function getFaixa(score, max) {
+  const p = score / max;
+  if (p >= 0.87) return {
+    label: "Muito presente",
+    color: "#C9A84C"
+  };
+  if (p >= 0.72) return {
+    label: "Ativo",
+    color: "#7BAF8A"
+  };
+  if (p >= 0.55) return {
+    label: "Moderado",
+    color: "#7B9EC4"
+  };
+  if (p >= 0.38) return {
+    label: "Pouco presente",
+    color: "#9B8A7A"
+  };
+  return {
+    label: "Silenciado",
+    color: "#A07070"
+  };
+}
+
+// ─── ARCHETYPES ───────────────────────────────────────────────────────────────
+const A = {
+  inocente: {
+    name: "Inocente",
+    phase: "preparação",
+    color: "#C4A855",
+    core: "Carrega uma abertura genuína ao mundo e uma capacidade de renovar a confiança mesmo depois de perder.",
+    pattern: "Ameniza o desconforto antes de senti-lo; acredita que vai se resolver antes de verificar se vai. O otimismo funciona como interruptor — desliga a angústia antes que ela ensine algo.",
+    relations: "Idealiza quem ama e tem dificuldade de nomear quando algo está errado. A raiva raramente aparece onde seria uma resposta honesta.",
+    beneath: "Em algum momento, encarar a realidade custou demais — e a esperança se tornou uma forma de continuar.",
+    integration: "Aprender que clareza e confiança podem coexistir — ver o que é difícil e ainda assim escolher acreditar.",
+    shadow: "Quando muito ativa, vira negação: sinais claros são ignorados, decisões difíceis adiadas, a dor do outro subestimada.",
+    question: "Existe algo que você já sabe — e continua não nomeando? O que você estaria pronto para ver se soubesse que conseguiria suportar?",
+    practice: "Inocente: esta semana, fique com um desconforto por 90 segundos sem tentar aliviá-lo. Apenas observe o que está ali."
+  },
+  orfao: {
+    name: "Órfão",
+    phase: "preparação",
+    color: "#7B9E87",
+    core: "Tem uma lucidez rara sobre o sofrimento — nomeá-lo sem embelezar é uma força genuína.",
+    pattern: "O sistema de alerta opera antes da evidência: antecipa a decepção, monitora sinais de afastamento, organiza a narrativa pelas perdas. Quando as coisas vão bem, parte de você estranha.",
+    relations: "Testa antes de confiar — às vezes sem perceber. Pode afastar quem quer manter perto e depois usar o afastamento como prova do que já esperava.",
+    beneath: "Alguém que deveria estar presente falhou de forma concreta. Confiar passou a parecer ingenuidade.",
+    integration: "Distinguir o que está acontecendo agora do que aconteceu antes — essa diferença abre espaço para a confiança sem exigir que seja cega.",
+    shadow: "Vitimização como identidade, autossabotagem no momento em que algo começa a funcionar, profecias que se cumprem porque foram preparadas.",
+    question: "Tem alguém na sua vida que tem dado provas reais de que fica — e que você ainda não deixa entrar de vez? O que você estaria arriscando se confiasse?",
+    practice: "Órfão: observe nos próximos três dias quando você antecipa uma decepção antes que ela aconteça. Anote uma frase sobre o que sentiu no corpo naquele momento."
+  },
+  guerreiro: {
+    name: "Guerreiro",
+    phase: "preparação",
+    color: "#C4532A",
+    core: "Sabe o que quer, age com determinação e não recua facilmente — quando a força está a serviço do que importa, é uma dádiva.",
+    pattern: "A luta se torna modo padrão de existir, mesmo sem ameaça real. Parar parece vulnerabilidade; pedir parece fraqueza.",
+    relations: "Pode usar a força onde precisaria de abertura. Luta com quem quer se aproximar — e depois estranha a distância.",
+    beneath: "Mostrar fragilidade teve um custo real. O sistema aprendeu que a força é mais segura que a necessidade.",
+    integration: "Redirecionar a coragem para dentro: sentir, parar, pedir também são atos que exigem força — às vezes mais do que qualquer batalha.",
+    shadow: "Rigidez, isolamento disfarçado de autonomia, esgotamento que não é admitido até o limite.",
+    question: "Com quem você está lutando quando, no fundo, quer apenas se aproximar? O que impede a aproximação?",
+    practice: "Guerreiro: escolha uma coisa que você tem adiado por parecer fraqueza — pedir ajuda, admitir um erro — e faça com uma pessoa de confiança esta semana."
+  },
+  caridoso: {
+    name: "Caridoso",
+    phase: "preparação",
+    color: "#9B7DC4",
+    core: "Percebe o que o outro precisa antes que ele mesmo perceba — quando genuíno, esse cuidado é transformador.",
+    pattern: "Dar se torna uma forma de garantir presença e pertencimento. O espaço próprio encolhe enquanto o cuidado cresce.",
+    relations: "Dá mais do que recebe e normaliza a assimetria. Quando alguém oferece cuidado de volta, desvia — 'não precisa', 'eu tô bem'.",
+    beneath: "Ser necessário é a forma mais segura de não ser abandonado. Cuidar é o que garante presença.",
+    integration: "Aprender que você pode ser cuidado sem precisar justificar isso com sofrimento ou necessidade.",
+    shadow: "Ressentimento silencioso que cresce sob a generosidade, adoecimento como única permissão para parar.",
+    question: "Quando foi a última vez que você recebeu algo — cuidado, atenção, ajuda — sem desviar ou minimizar? O que acontece em você quando alguém cuida de você?",
+    practice: "Caridoso: aceite algo que for oferecido a você esta semana sem desviar. Deixe-se ser cuidado por um momento completo."
+  },
+  explorador: {
+    name: "Explorador",
+    phase: "jornada",
+    color: "#5B8DB8",
+    core: "Recusa o que é pequeno demais — tem uma capacidade real de ir além das fronteiras conhecidas e trazer algo de volta.",
+    pattern: "O movimento se torna o fim em si mesmo. A busca se reinicia exatamente quando algo começa a exigir presença real.",
+    relations: "Chega com entusiasmo genuíno — e pode partir antes de aprofundar. A intimidade real pode ser lida como aprisionamento.",
+    beneath: "Em algum momento, ficar pareceu perder-se. O movimento se tornou uma forma segura de existir com liberdade.",
+    integration: "A liberdade mais profunda não está em partir sempre — está em poder escolher ficar. O comprometimento não reduz: às vezes revela.",
+    shadow: "Mobilidade compulsiva, muitos inícios e poucos aprofundamentos, a sensação persistente de que o que importa está sempre em outro lugar.",
+    question: "O que estava se tornando real naquele momento em que você foi embora? O que você foi buscar em outro lugar que poderia ter encontrado se tivesse ficado?",
+    practice: "Explorador: identifique algo que você tem vontade de abandonar agora. Comprometa-se a ficar por mais sete dias e anote o que surge."
+  },
+  destruidor: {
+    name: "Destruidor",
+    phase: "jornada",
+    color: "#8B5A5A",
+    core: "Sabe o que precisa terminar — e tem coragem de agir nisso quando a transformação é consciente.",
+    pattern: "A destruição aparece no momento errado: quando algo estava funcionando, crescendo, ficando definitivo. O padrão se repete em diferentes domínios sem ser reconhecido como padrão.",
+    relations: "Pode romper antes da intimidade aprofundar. A lógica não dita: se eu destruo antes, a queda é minha escolha.",
+    beneath: "O comprometimento definitivo se tornou ameaçador — talvez porque o que foi permanente no passado trouxe dor.",
+    integration: "Encerrar com intenção em vez de explodir por impulso — a transformação consciente sabe o que está deixando ir e por quê.",
+    shadow: "Autossabotagem repetida, dificuldade de manter o que foi construído, impulsividade nas rupturas.",
+    question: "O que estava se tornando definitivo antes de cada ruptura? O que você estaria perdendo se aquilo permanecesse?",
+    practice: "Destruidor: identifique algo que precisa terminar. Escreva como seria encerrar isso com cuidado — não explodir: concluir."
+  },
+  amante: {
+    name: "Amante",
+    phase: "jornada",
+    color: "#C47A8A",
+    core: "Sente fundo — a beleza, a dor, o outro. Essa intensidade de presença cria vínculos genuínos quando está equilibrada.",
+    pattern: "A intensidade pode se tornar necessidade. O outro deixa de ser desejado e passa a ser necessário para que o eu se sinta inteiro.",
+    relations: "A fronteira entre você e o outro se dissolve. Seu humor, suas decisões, seu senso de valor se misturam com o estado da relação.",
+    beneath: "O amor foi dado de forma condicional ou imprevisível — o sistema aprendeu a monitorar o outro como regulador de si mesmo.",
+    integration: "Amar sem se perder — estar completamente com alguém e ainda saber onde você começa e onde o outro termina.",
+    shadow: "Dependência afetiva, fusão que sufoca, desestruturação desproporcional diante da ausência ou do término.",
+    question: "Quanto do que você sente sobre si mesmo depende do estado do outro? O que restaria de você se essa relação desaparecesse amanhã?",
+    practice: "Amante: passe 30 minutos por dia fazendo algo sozinho — sem verificar mensagens. Observe o que encontra quando está apenas consigo."
+  },
+  criador: {
+    name: "Criador",
+    phase: "jornada",
+    color: "#6B8E6B",
+    core: "Transforma visão interna em forma — a capacidade de dar existência ao que ainda não existia é uma força real.",
+    pattern: "O que você cria e quem você é se confundem. Uma crítica ao trabalho é vivida como crítica à pessoa.",
+    relations: "Apresenta a obra em vez de se apresentar. É mais seguro ser avaliado pelo que faz do que pelo que é.",
+    beneath: "Em algum momento foi aprendido que o valor depende da produção — existir sem criar não pareceu suficiente.",
+    integration: "Separar quem você é do que você faz. Sua existência tem valor independente de qualquer obra.",
+    shadow: "Perfeccionismo paralisante, projetos eternamente inacabados, bloqueio criativo como forma de evitar o julgamento.",
+    question: "O que você criaria se soubesse que ninguém — incluindo você — julgaria? O que essa resposta revela sobre o que você realmente quer expressar?",
+    practice: "Criador: crie algo esta semana que não será mostrado a ninguém. Sem avaliação, sem propósito além do ato."
+  },
+  governante: {
+    name: "Governante",
+    phase: "retorno",
+    color: "#8B7355",
+    core: "Cria ordem onde há caos, assume responsabilidade e pensa no longo prazo — quando consciente, é liderança genuína.",
+    pattern: "O controle que deveria servir à vida começa a servir ao medo. A dificuldade de confiar que as coisas funcionam sem gestão constante se instala.",
+    relations: "Gerencia onde deveria apenas estar. Antecipa, organiza, assume o que o outro deveria assumir. A intenção é cuidar; o efeito pode ser afastar.",
+    beneath: "Em algum momento o ambiente era caótico ou imprevisível. Controlar foi a forma inteligente de criar segurança.",
+    integration: "Distinguir responsabilidade genuína de controle ansioso. Soltar o incontrolável não é falha — é sabedoria.",
+    shadow: "Hiperresponsabilidade que esgota, dificuldade de pedir ajuda, peso silencioso do que é carregado sozinho.",
+    question: "Se as coisas dessem errado enquanto você não estava gerenciando — o que você teria que sentir que o controle está te ajudando a não sentir?",
+    practice: "Governante: escolha algo que você normalmente controla e deixe de gerenciar por 48 horas. Observe o que surge no corpo quando você solta."
+  },
+  mago: {
+    name: "Mago",
+    phase: "retorno",
+    color: "#6B5B8B",
+    core: "Vê o que não é imediatamente visível — padrões, conexões, o que está sob a superfície. Quando a serviço da transformação, essa percepção é rara.",
+    pattern: "O conhecimento pode virar distância. Analisar substitui sentir; perceber o outro substitui ser percebido.",
+    relations: "Você vê e compreende muito do outro — mas permite que pouco seja visto em você. A percepção se torna proteção e, às vezes, controle.",
+    beneath: "Ser surpreendido teve um custo. Entender tudo se tornou uma forma de nunca estar desprotegido.",
+    integration: "Não é necessário compreender tudo para estar seguro. Deixar-se surpreender é um ato de coragem.",
+    shadow: "Grandiosidade sutil, manipulação pelo conhecimento sem perceber, hiato crescente entre o que entende e o que vive.",
+    question: "Existe algo que você compreende muito bem sobre si mesmo — e que ainda assim não mudou? O que está faltando entre entender e viver?",
+    practice: "Mago: em uma situação importante esta semana, antes de analisar, pergunte-se: o que estou sentindo no corpo agora? Fique dois minutos com isso."
+  },
+  sabio: {
+    name: "Sábio",
+    phase: "retorno",
+    color: "#5B7B8B",
+    core: "Busca a verdade que não é conveniente — esse amor pela clareza e pelo que é real é uma força de discernimento genuína.",
+    pattern: "O entendimento substitui o sentir. A mente processa com precisão; a experiência fica para trás. Muito é compreendido, pouco é encarnado.",
+    relations: "Há uma qualidade de observador — presente, mas com uma parte sempre de fora. O outro sente a distância mesmo que não consiga nomeá-la.",
+    beneath: "Sentir foi perigoso ou ineficaz. A análise se tornou o modo mais confiável e previsível de existir.",
+    integration: "Encarnar o que sabe. O passo que falta não é mais análise — é deixar que o que já se sabe chegue ao corpo, às escolhas, à forma de amar.",
+    shadow: "Paralisia pela análise, isolamento intelectualizado, saber muito sobre si mesmo sem mudar nada.",
+    question: "Existe algo que você entende muito bem — e que ainda não chegou às suas escolhas, ao seu corpo, às suas relações? O que impede essa chegada?",
+    practice: "Sábio: cinco minutos por dia de silêncio sem tentar entender nada. Apenas observe o que está presente sem nomear."
+  },
+  bobo: {
+    name: "Bobo",
+    phase: "retorno",
+    color: "#C4A855",
+    core: "Encontra alegria onde outros veem peso — a leveza genuína como resistência ao excesso de seriedade é uma dádiva real.",
+    pattern: "O humor pode aparecer exatamente quando a profundidade estava prestes a ocorrer. A leveza que libera se torna a leveza que protege.",
+    relations: "É querido — mas às vezes com uma distância. A queixa de não ser levado a sério coexiste com o comportamento que dificulta exatamente isso.",
+    beneath: "O peso foi insuportável em algum momento. A leveza se tornou a única forma segura de existir e de ser aceito.",
+    integration: "Ser leve e ser levado a sério não são opostos. A alegria genuína pode coexistir com a profundidade.",
+    shadow: "Humor como armadura que impede contato real, irresponsabilidade disfarçada de liberdade, solidão por baixo do encantamento.",
+    question: "Existe algo que você sente mas não mostra porque 'pesaria demais'? O que seria diferente se você fosse visto também nessa parte?",
+    practice: "Bobo: no próximo momento em que surgir o impulso de desviar com humor, pause um instante — o que estava sentindo antes desse riso?"
+  }
+};
+const ALL = Object.keys(A);
+const PC = {
+  preparação: "#7B9E87",
+  jornada: "#5B8DB8",
+  retorno: "#8B7355"
+};
+const PL = {
+  preparação: "PREPARAÇÃO",
+  jornada: "JORNADA",
+  retorno: "RETORNO"
+};
+
+// ─── DYNAMIC COMBINATIONS ─────────────────────────────────────────────────────
+function getDynamic(dom, va, ac) {
+  const trio = [dom, va, ac];
+  const has = k => trio.includes(k);
+  const n = k => A[k].name;
+
+  // Triple
+  if (has("orfao") && has("governante") && has("amante")) return "A ferida do " + n("orfao") + " gera desconfiança; o " + n("governante") + " responde com controle para se sentir seguro; e o " + n("amante") + " quer conexão profunda mas encontra as portas travadas. Você quer se aproximar — e antes de deixar o outro entrar, começa a gerenciar a aproximação. Nos relacionamentos, a intimidade que mais quer é exatamente o que o sistema dificulta. O que raramente é nomeado: o cansaço de estar sempre vigilante e sempre no controle ao mesmo tempo.\nA pergunta desse trio: o que você estaria disposto a sentir se parasse de controlar antes que o outro chegasse perto?";
+
+  // Pairs — ordered by specificity
+  if (has("orfao") && has("governante")) return "A ferida de abandono do " + n("orfao") + " encontrou no " + n("governante") + " uma resposta: se controlo o ambiente, a perda não me pega de surpresa. Nos relacionamentos, o controle afasta quem você quer manter — e o afastamento confirma o que o " + n("orfao") + " já esperava. No trabalho, a hiperresponsabilidade esgota enquanto parece produtividade.\nA pergunta desse trio: que abandono você está tentando impedir com toda essa organização?";
+  if (has("orfao") && has("amante")) return "O " + n("orfao") + " mantém o sistema em alerta — e o " + n("amante") + " quer se entregar completamente. Você sente fundo e, ao mesmo tempo, espera que vá acabar. Nos relacionamentos, essa tensão aparece como intensidade que oscila com recuo defensivo. O que raramente é nomeado: o quanto você ama é proporcional ao quanto você teme perder.\nA pergunta desse trio: consegue estar completamente presente numa relação sem uma parte sua já estar se preparando para o fim?";
+  if (has("orfao") && has("guerreiro")) return "A ferida do " + n("orfao") + " e a armadura do " + n("guerreiro") + ": a força foi construída sobre uma fragilidade que não pode ser mostrada. A determinação que aparece é real — e também isola. No trabalho, competência com dificuldade de pedir ajuda. Nos vínculos, distância onde há desejo de proximidade.\nA pergunta desse trio: com quem você luta quando, no fundo, o que mais quer é ser visto?";
+  if (has("orfao") && has("caridoso")) return "O " + n("caridoso") + " cuida — e o " + n("orfao") + " sabe que ser necessário é a forma mais segura de não ser deixado. A generosidade tem uma camada protetora. Nos relacionamentos, você dá muito e recebe pouco — e normaliza. O que raramente é nomeado: que parte do cuidado é amor e que parte é estratégia de permanência?\nA pergunta desse trio: o que você acredita que aconteceria se você parasse de ser tão útil?";
+  if (has("guerreiro") && has("amante")) return "A força do " + n("guerreiro") + " e a intensidade do " + n("amante") + ": quando ama, ama com tudo; quando luta, luta com tudo. O problema é nem sempre saber a diferença. Pode lutar com quem quer se aproximar e se perguntar por que há distância. No trabalho, intensidade que produz — e esgota.\nA pergunta desse trio: onde você usa a força quando o que a situação pede é entrega?";
+  if (has("guerreiro") && has("criador")) return "A determinação do " + n("guerreiro") + " e a expressão do " + n("criador") + " podem criar muito — mas também um perfeccionismo combativo: exigir o impossível de si mesmo antes de se expor ao julgamento. A obra nunca está boa o suficiente; o esforço nunca é suficiente.\nA pergunta desse trio: a quem você está provando algo — e quando isso vai ser suficiente?";
+  if (has("guerreiro") && has("mago")) return "A força do " + n("guerreiro") + " e a percepção do " + n("mago") + ": age sobre o que percebe com determinação, raramente está errado, dificilmente recua. Nos vínculos, você vê o outro com precisão mas deixa pouco espaço para ser visto. No trabalho, transforma — com dificuldade de tolerar quem não enxerga o que você enxerga.\nA pergunta desse trio: o que você usaria a sua percepção e força para proteger se não precisasse usá-las para se defender?";
+  if (has("amante") && has("destruidor")) return "O " + n("amante") + " busca fusão e entrega — e o " + n("destruidor") + " sabota exatamente quando a conexão começa a ser real. Você busca intimidade e encontra formas de destruí-la antes que fique definitiva. Projetos e relações chegam ao pico — e rompem. O que raramente é nomeado: destruir antes é uma forma de controlar a perda.\nA pergunta desse trio: o que está se tornando real agora que parte de você quer romper antes que fique grande demais?";
+  if (has("amante") && has("caridoso")) return "O " + n("amante") + " sente fundo e o " + n("caridoso") + " cuida — juntos criam presença relacional intensa. Mas as fronteiras podem desaparecer: o cuidado e o amor se misturam com a necessidade de ser necessário. O que é seu e o que é do outro se embaralha.\nA pergunta desse trio: você ama — ou você precisa? E como você distingue os dois em você?";
+  if (has("governante") && has("amante")) return "O " + n("governante") + " estrutura e o " + n("amante") + " quer entrega — a tensão é constante. Parte de você quer se entregar completamente; outra parte precisa do controle para se sentir segura. Nos vínculos, você se aproxima e recua para a posição de gestão. O que raramente é nomeado: o controle é o que impede a conexão que você mais quer.\nA pergunta desse trio: o que você precisaria soltar para deixar a conexão que quer realmente acontecer?";
+  if (has("governante") && has("criador")) return "A estrutura do " + n("governante") + " e a expressão do " + n("criador") + ": produz resultados extraordinários — e pode se tornar o obstáculo do próprio processo quando a exigência de controle entra em conflito com a liberdade criativa. Projetos bem estruturados com processo mais tenso do que precisa ser.\nA pergunta desse trio: o que você criaria se não precisasse garantir que ia dar certo antes de começar?";
+  if (has("governante") && has("mago")) return "O " + n("governante") + " controla o externo e o " + n("mago") + " controla pelo conhecimento — juntos, raramente são surpreendidos e raramente se permitem ser. Nos vínculos, vê tudo e se revela pouco. A armadura é sofisticada demais para parecer armadura.\nA pergunta desse trio: o que está sendo protegido por tanta competência e tanta percepção juntas?";
+  if (has("governante") && has("sabio")) return "O " + n("governante") + " age e o " + n("sabio") + " analisa — podem criar decisões impecáveis e demoradas demais. A análise pode se tornar uma forma de adiar a ação; a ação pode ocorrer sem integrar o que foi aprendido. Nos vínculos, há compreensão com pouca exposição.\nA pergunta desse trio: o que você precisaria parar de entender para finalmente sentir?";
+  if (has("explorador") && has("destruidor")) return "O " + n("explorador") + " busca e o " + n("destruidor") + " encerra — movimento contínuo que raramente permite chegada. A busca se reinicia toda vez que algo começa a exigir presença real. Muitos inícios, poucos aprofundamentos, a sensação de que o que importa está sempre em outro lugar.\nA pergunta desse trio: o que está aqui, agora, esperando que você fique tempo suficiente para descobrir?";
+  if (has("explorador") && has("amante")) return "O " + n("explorador") + " quer liberdade e o " + n("amante") + " quer fusão — tensão criativa e dolorosa. Você quer conexão profunda e sente que pertencer demais é perder-se. Nos vínculos, oscila entre entrega intensa e distância que o outro não esperava.\nA pergunta desse trio: a liberdade que você busca lá fora — o que ela protege de encontrar dentro?";
+  if (has("sabio") && has("governante")) return "O " + n("sabio") + " compreende e o " + n("governante") + " gerencia — raramente agem sem entender e raramente entendem sem querer controlar. A análise pode ser uma forma de adiar; a ação pode ocorrer sem o que foi compreendido chegar ao corpo.\nA pergunta desse trio: o que você conseguiria viver se parasse de precisar entender antes?";
+  if (has("sabio") && has("criador")) return "O " + n("sabio") + " analisa e o " + n("criador") + " expressa — podem criar obra de grande profundidade, mas a análise pode alimentar o perfeccionismo indefinidamente. Você compreende o que quer criar — e essa compreensão torna o ato mais difícil.\nA pergunta desse trio: o que você entregaria ao mundo se soubesse que entender mais não vai te proteger do julgamento?";
+  if (has("inocente") && has("caridoso")) return "A esperança do " + n("inocente") + " e o cuidado do " + n("caridoso") + " criam generosidade genuína — e uma vulnerabilidade específica: acreditar no melhor das pessoas enquanto cuida delas mesmo quando elas não cuidam de volta. As assimetrias demoram a ser vistas.\nA pergunta desse trio: o que você estaria encarando se não estivesse esperando e cuidando ao mesmo tempo?";
+  if (has("mago") && has("guerreiro")) return "A percepção do " + n("mago") + " e a força do " + n("guerreiro") + ": insight e ação — raramente está errado, dificilmente recua, deixa pouco espaço para ser visto. Você transforma ao redor e resiste a ser transformado.\nA pergunta desse trio: quem você seria se não precisasse estar sempre certo antes de agir?";
+  if (has("destruidor") && has("caridoso")) return "O " + n("caridoso") + " cuida profundamente — e o " + n("destruidor") + " encerra quando o esgotamento chega. Entrega total até o momento em que não é mais possível. A ruptura que vem depois do cuidado extremo é uma forma de recuperar o espaço que o cuidado consumiu.\nA pergunta desse trio: o que você precisaria aprender a recusar antes de chegar ao ponto de romper?";
+  if (has("bobo") && has("orfao")) return "A leveza do " + n("bobo") + " e a ferida do " + n("orfao") + ": o humor é real — e também protege uma dor que raramente encontra espaço. Você é encantador, faz as pessoas rirem, e raramente é visto onde mais importa. A distância é mantida por graça.\nA pergunta desse trio: onde o riso aparece para proteger o que também merece ser visto?";
+  if (has("bobo") && has("guerreiro")) return "A força do " + n("guerreiro") + " e a leveza do " + n("bobo") + ": presença intensa que alterna entre determinação e irreverência. Usa o humor para aliviar o peso da própria intensidade. Nos vínculos, é forte e encantador — com dificuldade de mostrar quando está sobrecarregado.\nA pergunta desse trio: o que você estaria pedindo se não precisasse parecer que está bem?";
+
+  // Fallback
+  return n(dom) + ", " + n(va) + " e " + n(ac) + " formam uma configuração específica — essas três energias se reforçam e se limitam de formas que provavelmente você já reconhece nos padrões que se repetem. O trabalho não é resolver a tensão entre elas: é aprender a vê-la antes de repeti-la.\nA pergunta desse trio: que padrão esse trio está te pedindo que você pare de ignorar?";
+}
+
+// ─── BUILD ANALYSIS ───────────────────────────────────────────────────────────
+function buildAnalysis(scores, scaleMax, dom, va, ac, least) {
+  const d = A[dom],
+    v = A[va],
+    a = A[ac],
+    l = A[least];
+  const phases = {
+    preparação: 0,
+    jornada: 0,
+    retorno: 0
+  };
+  ALL.forEach(k => {
+    phases[A[k].phase] += scores[k];
+  });
+  const phaseVals = Object.values(phases);
+  const maxPh = Math.max(...phaseVals),
+    minPh = Math.min(...phaseVals);
+  const maxPhKey = Object.keys(phases).find(k => phases[k] === maxPh);
+  const minPhKey = Object.keys(phases).find(k => phases[k] === minPh);
+  const pdr = (maxPh - minPh) / (scaleMax * 4);
+  const trio = [dom, va, ac];
+  const has = k => trio.includes(k);
+  const domPct = scores[dom] / scaleMax;
+  const domLv = domPct >= 0.87 ? "com muita intensidade" : domPct >= 0.72 ? "de forma significativa" : "de forma moderada";
+
+  // ── OPENING ─────────────────────────────────────────────────────────────────
+  const opening = "A energia do " + d.name + " organiza tudo " + domLv + ". " + d.core + " E, quando em piloto automático: " + d.pattern + "\n\n" + getDynamic(dom, va, ac).split("\nA pergunta desse trio:")[0] + "\n\n" + "O " + a.name + " completa a constelação — " + a.core + " Aqui " + (A[ac].phase === A[dom].phase ? "reforça o movimento de " + A[ac].phase + "." : "traz a dimensão de " + A[ac].phase + ", que pode tanto ampliar quanto tensionar o que já está ativo.");
+
+  // ── PHASE BALANCE ────────────────────────────────────────────────────────────
+  let phaseBalance;
+  if (pdr < 0.08) {
+    phaseBalance = "As três fases estão quase empatadas (" + phases.preparação + " · " + phases.jornada + " · " + phases.retorno + ") — o que pode ser integração de diferentes movimentos ou dispersão sem centro claro.\nQual das duas está mais próxima da sua realidade agora: sensação de fluxo — ou de estar sempre em movimento sem saber bem para onde?";
+  } else {
+    phaseBalance = "A maior concentração está em " + PL[maxPhKey] + " (" + phases[maxPhKey] + " pts) — " + (maxPhKey === "preparação" ? "construção de bases, força, processamento do passado." : maxPhKey === "jornada" ? "travessia ativa, transformação, aprofundamento." : "integração, autoridade, habitando o que foi aprendido.") + " A fase com menos energia é " + PL[minPhKey] + " (" + phases[minPhKey] + " pts) — um território que está esperando.";
+  }
+
+  // ── DOMINANT DEEP ────────────────────────────────────────────────────────────
+  const dominantDeep = [{
+    label: "Na personalidade",
+    text: d.core + " " + d.pattern
+  }, {
+    label: "Nos vínculos",
+    text: d.relations
+  }, {
+    label: "O que está por baixo",
+    text: d.beneath
+  }, {
+    label: "O convite",
+    text: d.integration
+  }];
+
+  // ── TRIO DYNAMIC (full, with question) ───────────────────────────────────────
+  const trioDynamic = getDynamic(dom, va, ac);
+  const trioQuestion = trioDynamic.includes("A pergunta desse trio:") ? trioDynamic.split("A pergunta desse trio:")[1].trim() : "";
+
+  // ── LEAST NARRATIVE ──────────────────────────────────────────────────────────
+  const leastWhy = has("governante") || has("guerreiro") ? "Num sistema orientado para ação e controle, o " + l.name + " raramente encontra espaço para emergir — " + l.name.toLowerCase() + " exige um tipo de presença que esse padrão não prioriza." : has("orfao") ? "Com o " + d.name + " em alerta constante, o " + l.name + " fica em segundo plano — " + l.beneath.toLowerCase() : "Nessa configuração, o " + l.name + " ficou em segundo plano — " + l.beneath.toLowerCase();
+  const leastNarrative = leastWhy + "\n\n" + "O custo concreto: " + l.shadow + "\n\n" + "Como saber se é aversão ou negligência: ao ler sobre o " + l.name + ", o que surge — repulsa ou indiferença? Repulsa indica uma experiência que tornou essa energia indesejável; indiferença indica que simplesmente não foi cultivada. Os dois pedem abordagens diferentes.\n\n" + "O convite: " + l.integration;
+
+  // ── INTEGRATION PATH ─────────────────────────────────────────────────────────
+  const integrationPath = "O que está sendo pedido aqui não é uma mudança de comportamento — é uma mudança na relação com o que já opera em você. " + d.integration + "\n\n" + "O ciclo central a reconhecer: " + getDynamic(dom, va, ac).split("\nA pergunta desse trio:")[0].split(". ").slice(-2).join(". ") + "\n\n" + "O " + l.name + " — a energia que está esperando — é o recurso que pode sustentar esse movimento. " + l.integration + " Não precisa se tornar dominante. Precisa se tornar disponível.\n\nO que você genuinamente é, quando não precisa se proteger — é isso que está esperando ser habitado.";
+
+  // ── REFLECTIONS — 8 terapêuticas ────────────────────────────────────────────
+  const reflections = [
+  // [0] dominante — comportamento cotidiano
+  "Quando foi a última vez que o padrão do " + d.name + " apareceu sem que você tivesse escolhido ativá-lo? O que estava acontecendo logo antes?",
+  // [1] dominante + muito ativo — o ciclo
+  "Que ciclo o " + d.name + " e o " + v.name + " criam juntos na sua vida — e em que momento você costuma perceber que já está no meio dele antes de ter escolhido entrar?",
+  // [2] um relacionamento específico
+  "Pense numa relação importante. Como o padrão do " + d.name + " aparece ali — e o que essa relação revela sobre o que você ainda não integrou?",
+  // [3] muito ativo — o custo não nomeado
+  "Qual é o custo real do " + v.name + " na sua vida — o que ele cobra de você que raramente é contabilizado?",
+  // [4] ativo — complemento ou tensão
+  "Onde o " + a.name + " amplifica o que você já carrega — e onde ele complica? Há alguma situação recente onde essa tensão apareceu?",
+  // [5] menos ativo
+  "O " + l.name + " está pouco presente agora. O que você perdeu — concretamente — pela ausência dessa energia na sua vida?",
+  // [6] o que a configuração protege
+  "O que essa constelação inteira — " + d.name + ", " + v.name + " e " + a.name + " — está te ajudando a não sentir? Que experiência ela organiza para manter à distância?",
+  // [7] propósito
+  "Se essas energias estivessem a serviço do que você genuinamente quer — e não de um padrão antigo — o que você estaria fazendo diferente? E o que isso revela sobre para onde seu caminho aponta?"];
+
+  // ── PRACTICES ────────────────────────────────────────────────────────────────
+  const practices = [d.name + ": " + d.practice, v.name + ": " + v.practice, l.name + " (a energia que está esperando): " + l.practice];
+  return {
+    d,
+    v,
+    a,
+    l,
+    phases,
+    opening,
+    phaseBalance,
+    dominantDeep,
+    trioDynamic,
+    trioQuestion,
+    leastNarrative,
+    integrationPath,
+    reflections,
+    practices
+  };
+}
+
+// ─── TRIANGLE SVG ─────────────────────────────────────────────────────────────
+function Triangle({
+  dom,
+  va,
+  ac
+}) {
+  const d = A[dom],
+    v = A[va],
+    a = A[ac];
+  if (!d || !v || !a) return null;
+  const cx = 200,
+    cy = 200,
+    R = 148;
+  const apex = {
+    x: cx,
+    y: cy - R
+  };
+  const baseL = {
+    x: cx - R * Math.sin(Math.PI / 3),
+    y: cy + R / 2
+  };
+  const baseR = {
+    x: cx + R * Math.sin(Math.PI / 3),
+    y: cy + R / 2
+  };
+  function Orb({
+    pos,
+    arch,
+    size,
+    lbl
+  }) {
+    return /*#__PURE__*/React.createElement("g", null, /*#__PURE__*/React.createElement("circle", {
+      cx: pos.x,
+      cy: pos.y,
+      r: size + 9,
+      fill: "rgba(0,0,0,0.5)"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: pos.x,
+      cy: pos.y,
+      r: size + 2,
+      fill: arch.color,
+      opacity: "0.2"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: pos.x,
+      cy: pos.y,
+      r: size,
+      fill: arch.color,
+      opacity: "0.92"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: pos.x,
+      cy: pos.y,
+      r: size,
+      fill: "none",
+      stroke: "rgba(255,255,255,0.25)",
+      strokeWidth: "1.5"
+    }), /*#__PURE__*/React.createElement("text", {
+      x: pos.x,
+      y: pos.y - 5,
+      textAnchor: "middle",
+      fill: "white",
+      fontSize: size > 40 ? 10 : 9,
+      fontFamily: "Georgia",
+      fontWeight: "bold"
+    }, arch.name.toUpperCase()), /*#__PURE__*/React.createElement("text", {
+      x: pos.x,
+      y: pos.y + 8,
+      textAnchor: "middle",
+      fill: "rgba(255,255,255,0.65)",
+      fontSize: "7.5",
+      fontFamily: "serif",
+      fontStyle: "italic"
+    }, PL[arch.phase]), lbl && /*#__PURE__*/React.createElement("text", {
+      x: pos.x,
+      y: pos.y + size + 20,
+      textAnchor: "middle",
+      fill: "rgba(201,168,76,0.55)",
+      fontSize: "7",
+      fontFamily: "Georgia",
+      letterSpacing: "1.5"
+    }, lbl));
+  }
+  return /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 400 400",
+    style: {
+      width: "100%",
+      maxWidth: 420,
+      height: "auto",
+      display: "block",
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("radialGradient", {
+    id: "iap-bg",
+    cx: "50%",
+    cy: "50%",
+    r: "50%"
+  }, /*#__PURE__*/React.createElement("stop", {
+    offset: "0%",
+    stopColor: "#1a1a2e",
+    stopOpacity: "0.98"
+  }), /*#__PURE__*/React.createElement("stop", {
+    offset: "100%",
+    stopColor: "#090910",
+    stopOpacity: "1"
+  })), /*#__PURE__*/React.createElement("radialGradient", {
+    id: "iap-g0",
+    cx: "50%",
+    cy: "50%",
+    r: "50%"
+  }, /*#__PURE__*/React.createElement("stop", {
+    offset: "0%",
+    stopColor: d.color,
+    stopOpacity: "0.35"
+  }), /*#__PURE__*/React.createElement("stop", {
+    offset: "100%",
+    stopColor: d.color,
+    stopOpacity: "0"
+  })), /*#__PURE__*/React.createElement("radialGradient", {
+    id: "iap-g1",
+    cx: "50%",
+    cy: "50%",
+    r: "50%"
+  }, /*#__PURE__*/React.createElement("stop", {
+    offset: "0%",
+    stopColor: v.color,
+    stopOpacity: "0.28"
+  }), /*#__PURE__*/React.createElement("stop", {
+    offset: "100%",
+    stopColor: v.color,
+    stopOpacity: "0"
+  })), /*#__PURE__*/React.createElement("radialGradient", {
+    id: "iap-g2",
+    cx: "50%",
+    cy: "50%",
+    r: "50%"
+  }, /*#__PURE__*/React.createElement("stop", {
+    offset: "0%",
+    stopColor: a.color,
+    stopOpacity: "0.28"
+  }), /*#__PURE__*/React.createElement("stop", {
+    offset: "100%",
+    stopColor: a.color,
+    stopOpacity: "0"
+  })), /*#__PURE__*/React.createElement("filter", {
+    id: "iap-glow"
+  }, /*#__PURE__*/React.createElement("feGaussianBlur", {
+    stdDeviation: "3.5",
+    result: "b"
+  }), /*#__PURE__*/React.createElement("feMerge", null, /*#__PURE__*/React.createElement("feMergeNode", {
+    in: "b"
+  }), /*#__PURE__*/React.createElement("feMergeNode", {
+    in: "SourceGraphic"
+  })))), /*#__PURE__*/React.createElement("circle", {
+    cx: cx,
+    cy: cy,
+    r: 198,
+    fill: "url(#iap-bg)"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: cx,
+    cy: cy,
+    r: 184,
+    fill: "none",
+    stroke: "rgba(201,168,76,0.12)",
+    strokeWidth: "1.5"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: cx,
+    cy: cy,
+    r: 168,
+    fill: "none",
+    stroke: "rgba(201,168,76,0.06)",
+    strokeWidth: "0.5",
+    strokeDasharray: "4,8"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: cx,
+    cy: cy,
+    r: R,
+    fill: "none",
+    stroke: "rgba(201,168,76,0.5)",
+    strokeWidth: "1.5",
+    filter: "url(#iap-glow)"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: apex.x,
+    cy: apex.y,
+    r: 70,
+    fill: "url(#iap-g0)"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: baseL.x,
+    cy: baseL.y,
+    r: 58,
+    fill: "url(#iap-g1)"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: baseR.x,
+    cy: baseR.y,
+    r: 58,
+    fill: "url(#iap-g2)"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: apex.x + "," + apex.y + " " + baseL.x + "," + baseL.y + " " + baseR.x + "," + baseR.y,
+    fill: "rgba(201,168,76,0.04)",
+    stroke: "rgba(201,168,76,0.5)",
+    strokeWidth: "1.2",
+    filter: "url(#iap-glow)"
+  }), ALL.map((k, i) => {
+    const angle = i / ALL.length * 2 * Math.PI - Math.PI / 2,
+      pr = 182;
+    const isKey = [dom, va, ac].includes(k);
+    return /*#__PURE__*/React.createElement("circle", {
+      key: k,
+      cx: cx + pr * Math.cos(angle),
+      cy: cy + pr * Math.sin(angle),
+      r: isKey ? 5 : 2.5,
+      fill: isKey ? A[k].color : "rgba(255,255,255,0.15)",
+      opacity: isKey ? 1 : 0.5
+    });
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: cx,
+    cy: cy,
+    r: 24,
+    fill: "rgba(201,168,76,0.1)",
+    stroke: "rgba(201,168,76,0.35)",
+    strokeWidth: "1"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: cx,
+    y: cy - 2,
+    textAnchor: "middle",
+    fill: "rgba(201,168,76,0.75)",
+    fontSize: "9",
+    fontFamily: "Georgia",
+    fontStyle: "italic"
+  }, "centro"), /*#__PURE__*/React.createElement("text", {
+    x: cx,
+    y: cy + 10,
+    textAnchor: "middle",
+    fill: "rgba(201,168,76,0.45)",
+    fontSize: "7.5",
+    fontFamily: "Georgia"
+  }, "Si-mesmo"), /*#__PURE__*/React.createElement(Orb, {
+    pos: apex,
+    arch: d,
+    size: 45,
+    lbl: "DOMINANTE"
+  }), /*#__PURE__*/React.createElement(Orb, {
+    pos: baseL,
+    arch: v,
+    size: 38,
+    lbl: "MUITO ATIVO"
+  }), /*#__PURE__*/React.createElement(Orb, {
+    pos: baseR,
+    arch: a,
+    size: 38,
+    lbl: "ATIVO"
+  }));
+}
+
+// ─── UI COMPONENTS ────────────────────────────────────────────────────────────
+function rgb(h) {
+  return parseInt(h.slice(1, 3), 16) + "," + parseInt(h.slice(3, 5), 16) + "," + parseInt(h.slice(5, 7), 16);
+}
+function Tag({
+  arch,
+  label
+}) {
+  const data = A[arch];
+  if (!data) return null;
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5,
+      background: data.color + "22",
+      border: "1px solid " + data.color + "55",
+      borderRadius: 20,
+      padding: "3px 11px",
+      color: data.color,
+      fontSize: 11,
+      fontFamily: "Georgia",
+      fontWeight: "bold"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 7,
+      height: 7,
+      borderRadius: "50%",
+      background: data.color,
+      flexShrink: 0
+    }
+  }), data.name, label ? " · " + label : "");
+}
+function Card({
+  icon,
+  title,
+  color = "#C9A84C",
+  accent = false,
+  children,
+  cls = ""
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "card-block " + cls,
+    style: {
+      background: accent ? "linear-gradient(135deg,rgba(" + rgb(color) + ",0.08),rgba(0,0,0,0.28))" : "rgba(255,255,255,0.025)",
+      border: "1px solid " + (accent ? color + "44" : "rgba(255,255,255,0.06)"),
+      borderLeft: "3px solid " + color,
+      borderRadius: 8,
+      padding: "18px 20px",
+      marginBottom: 14
+    }
+  }, (icon || title) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, icon && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15
+    }
+  }, icon), /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      color,
+      fontSize: 10.5,
+      fontFamily: "Georgia",
+      letterSpacing: 2,
+      textTransform: "uppercase"
+    }
+  }, title)), children);
+}
+function P({
+  children,
+  style = {}
+}) {
+  if (typeof children === "string" && children.includes("\n\n")) {
+    return /*#__PURE__*/React.createElement(React.Fragment, null, children.split("\n\n").map((p, i) => /*#__PURE__*/React.createElement("p", {
+      key: i,
+      style: {
+        color: "rgba(255,255,255,0.80)",
+        fontSize: 13,
+        lineHeight: 1.85,
+        fontFamily: "Georgia",
+        margin: "0 0 14px",
+        textAlign: "justify",
+        ...style
+      }
+    }, p)));
+  }
+  return /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.80)",
+      fontSize: 13,
+      lineHeight: 1.85,
+      fontFamily: "Georgia",
+      margin: "0 0 10px",
+      textAlign: "justify",
+      ...style
+    }
+  }, children);
+}
+function Reflection({
+  text
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "reflection-box",
+    style: {
+      background: "rgba(201,168,76,0.05)",
+      border: "1px solid rgba(201,168,76,0.18)",
+      borderRadius: 7,
+      padding: "13px 16px",
+      marginBottom: 10,
+      display: "flex",
+      gap: 12,
+      alignItems: "flex-start"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#C9A84C",
+      fontSize: 13,
+      marginTop: 3,
+      flexShrink: 0
+    }
+  }, "\u25C6"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      color: "rgba(255,255,255,0.84)",
+      fontSize: 13,
+      lineHeight: 1.82,
+      fontFamily: "Georgia",
+      fontStyle: "italic"
+    }
+  }, text));
+}
+function Practice({
+  text
+}) {
+  const parts = text.split(": "),
+    label = parts[0],
+    body = parts.slice(1).join(": ");
+  return /*#__PURE__*/React.createElement("div", {
+    className: "practice-box",
+    style: {
+      background: "rgba(123,158,135,0.08)",
+      border: "1px solid rgba(123,158,135,0.22)",
+      borderRadius: 7,
+      padding: "13px 16px",
+      marginBottom: 10,
+      display: "flex",
+      gap: 12,
+      alignItems: "flex-start"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#7B9E87",
+      fontSize: 14,
+      marginTop: 2,
+      flexShrink: 0
+    }
+  }, "\u2192"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#7B9E87",
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 4,
+      textTransform: "uppercase",
+      fontFamily: "Georgia"
+    }
+  }, label), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      color: "rgba(255,255,255,0.80)",
+      fontSize: 13,
+      lineHeight: 1.78,
+      fontFamily: "Georgia"
+    }
+  }, body)));
+}
+function PhaseBar({
+  phases
+}) {
+  const total = Object.values(phases).reduce((a, b) => a + b, 0);
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 3,
+      height: 9,
+      borderRadius: 5,
+      overflow: "hidden",
+      marginBottom: 10
+    }
+  }, ["preparação", "jornada", "retorno"].map(ph => /*#__PURE__*/React.createElement("div", {
+    key: ph,
+    style: {
+      width: phases[ph] / total * 100 + "%",
+      background: PC[ph]
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 7
+    }
+  }, ["preparação", "jornada", "retorno"].map(ph => /*#__PURE__*/React.createElement("div", {
+    key: ph,
+    style: {
+      flex: 1,
+      textAlign: "center",
+      background: PC[ph] + "18",
+      border: "1px solid " + PC[ph] + "35",
+      borderRadius: 7,
+      padding: "7px 4px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: PC[ph],
+      fontSize: 8,
+      letterSpacing: 1,
+      textTransform: "uppercase"
+    }
+  }, ph), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "white",
+      fontSize: 17,
+      fontWeight: "bold",
+      marginTop: 3
+    }
+  }, phases[ph])))));
+}
+function ScoreSlider({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  color
+}) {
+  const pct = (value - min) / (max - min) * 100,
+    faixa = getFaixa(value, max);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 15
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 5
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "rgba(255,255,255,0.75)",
+      fontSize: 12,
+      fontFamily: "Georgia"
+    }
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: faixa.color,
+      fontSize: 9
+    }
+  }, faixa.label), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#C9A84C",
+      fontSize: 14,
+      fontWeight: "bold",
+      minWidth: 26,
+      textAlign: "right"
+    }
+  }, value))), /*#__PURE__*/React.createElement("input", {
+    type: "range",
+    min: min,
+    max: max,
+    value: value,
+    onChange: e => onChange(parseInt(e.target.value)),
+    style: {
+      width: "100%",
+      height: 4,
+      appearance: "none",
+      background: "linear-gradient(to right," + color + " " + pct + "%,rgba(255,255,255,0.08) 0)",
+      borderRadius: 2,
+      outline: "none",
+      cursor: "pointer"
+    }
+  }));
+}
+function DimBox({
+  label,
+  text,
+  borderColor
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderLeft: "2px solid " + (borderColor || "rgba(255,255,255,0.2)"),
+      paddingLeft: 14,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: borderColor || "rgba(255,255,255,0.4)",
+      fontSize: 9,
+      letterSpacing: 1.5,
+      marginBottom: 5,
+      textTransform: "uppercase",
+      fontFamily: "Georgia"
+    }
+  }, label), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      color: "rgba(255,255,255,0.80)",
+      fontSize: 13,
+      lineHeight: 1.78,
+      fontFamily: "Georgia"
+    }
+  }, text));
+}
+
+// ─── PDF SAVE ─────────────────────────────────────────────────────────────────
+function savePDF() {
+  document.body.classList.add("print-mode");
+  window.print();
+  setTimeout(() => document.body.classList.remove("print-mode"), 1200);
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+const BG = "linear-gradient(160deg,#0d0d18 0%,#111120 55%,#0a100d 100%)";
+function App() {
+  const [step, setStep] = useState("format");
+  const [format, setFormat] = useState(null);
+  const [scores, setScores] = useState({});
+  const [analysis, setAn] = useState(null);
+  const resultRef = useRef(null);
+  function chooseFormat(f) {
+    const cfg = SCALES[f],
+      mid = Math.round((cfg.min + cfg.max) / 2),
+      init = {};
+    ALL.forEach(k => {
+      init[k] = mid;
+    });
+    setScores(init);
+    setFormat(f);
+    setStep("input");
+  }
+  const cfg = format ? SCALES[format] : SCALES[84];
+  const srt = [...ALL].sort((a, b) => (scores[b] || 0) - (scores[a] || 0));
+  const dom = srt[0],
+    va = srt[1],
+    ac = srt[2],
+    least = srt[srt.length - 1];
+  const phases = {
+    preparação: 0,
+    jornada: 0,
+    retorno: 0
+  };
+  ALL.forEach(k => {
+    phases[A[k].phase] += scores[k] || 0;
+  });
+  function compute() {
+    const an = buildAnalysis(scores, cfg.max, dom, va, ac, least);
+    setAn(an);
+    setStep("result");
+    setTimeout(() => resultRef.current?.scrollIntoView({
+      behavior: "smooth"
+    }), 160);
+  }
+
+  // ── TELA 1: FORMAT ──────────────────────────────────────────────────────────
+  if (step === "format") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: BG,
+      color: "white",
+      fontFamily: "Georgia",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      letterSpacing: 4,
+      fontSize: 10,
+      color: "rgba(201,168,76,0.5)",
+      marginBottom: 12,
+      textTransform: "uppercase"
+    }
+  }, "Mapa Arquet\xEDpico \xB7 M\xF3dulo V"), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      margin: "0 0 8px",
+      fontSize: "clamp(22px,5vw,34px)",
+      color: "#C9A84C",
+      fontWeight: "normal",
+      textAlign: "center"
+    }
+  }, "Interpreta\xE7\xE3o do Invent\xE1rio"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.35)",
+      fontSize: 13,
+      marginBottom: 44,
+      textAlign: "center"
+    }
+  }, "Invent\xE1rio Arquet\xEDpico de Pearson"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.6)",
+      fontSize: 13,
+      marginBottom: 20,
+      textAlign: "center",
+      maxWidth: 400
+    }
+  }, "Qual formato voc\xEA realizou?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 14,
+      width: "100%",
+      maxWidth: 400
+    }
+  }, Object.entries(SCALES).map(([f, c]) => /*#__PURE__*/React.createElement("button", {
+    key: f,
+    onClick: () => chooseFormat(parseInt(f)),
+    style: {
+      padding: "20px 24px",
+      background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(201,168,76,0.3)",
+      borderRadius: 10,
+      color: "rgba(255,255,255,0.85)",
+      cursor: "pointer",
+      fontFamily: "Georgia",
+      textAlign: "left"
+    },
+    onMouseEnter: e => {
+      e.currentTarget.style.background = "rgba(201,168,76,0.1)";
+      e.currentTarget.style.borderColor = "rgba(201,168,76,0.65)";
+    },
+    onMouseLeave: e => {
+      e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+      e.currentTarget.style.borderColor = "rgba(201,168,76,0.3)";
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#C9A84C",
+      fontSize: 17,
+      fontWeight: "bold",
+      marginBottom: 5
+    }
+  }, f, " quest\xF5es"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12.5,
+      color: "rgba(255,255,255,0.52)"
+    }
+  }, c.label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "rgba(255,255,255,0.3)",
+      marginTop: 4
+    }
+  }, "Por energia: ", c.min, " a ", c.max, " \xB7 Total m\xE1ximo: ", c.max * 12)))));
+
+  // ── TELA 2: INPUT ───────────────────────────────────────────────────────────
+  if (step === "input") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: BG,
+      color: "white",
+      fontFamily: "Georgia",
+      paddingBottom: 70
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "linear-gradient(180deg,rgba(201,168,76,0.08),transparent)",
+      borderBottom: "1px solid rgba(201,168,76,0.13)",
+      padding: "24px 20px 18px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9.5,
+      letterSpacing: 3,
+      color: "rgba(201,168,76,0.5)",
+      marginBottom: 7,
+      textTransform: "uppercase"
+    }
+  }, "IAP \xB7 ", cfg.questions, " quest\xF5es \xB7 ", cfg.min, "\u2013", cfg.max), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      margin: 0,
+      fontSize: "clamp(18px,4vw,27px)",
+      color: "#C9A84C",
+      fontWeight: "normal"
+    }
+  }, "Insira sua Pontua\xE7\xE3o"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.4)",
+      fontSize: 12.5,
+      margin: "7px 0 0"
+    }
+  }, "Constela\xE7\xE3o atualizada em tempo real.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 720,
+      margin: "0 auto",
+      padding: "18px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(201,168,76,0.05)",
+      border: "1px solid rgba(201,168,76,0.18)",
+      borderRadius: 9,
+      padding: "15px 17px",
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      letterSpacing: 2,
+      color: "rgba(201,168,76,0.5)",
+      marginBottom: 11,
+      textTransform: "uppercase"
+    }
+  }, "Sua constela\xE7\xE3o atual"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 7,
+      marginBottom: 13
+    }
+  }, dom && /*#__PURE__*/React.createElement(Tag, {
+    arch: dom,
+    label: "Dominante"
+  }), va && /*#__PURE__*/React.createElement(Tag, {
+    arch: va,
+    label: "Muito ativo"
+  }), ac && /*#__PURE__*/React.createElement(Tag, {
+    arch: ac,
+    label: "Ativo"
+  })), /*#__PURE__*/React.createElement(PhaseBar, {
+    phases: phases
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 9,
+      fontSize: 11,
+      color: "rgba(255,255,255,0.3)",
+      fontStyle: "italic"
+    }
+  }, "Menos ativo: ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: A[least]?.color
+    }
+  }, A[least]?.name), " (", scores[least], " pts)")), ["preparação", "jornada", "retorno"].map(phase => /*#__PURE__*/React.createElement("div", {
+    key: phase,
+    style: {
+      background: "rgba(255,255,255,0.025)",
+      border: "1px solid " + PC[phase] + "35",
+      borderTop: "2px solid " + PC[phase],
+      borderRadius: 9,
+      padding: "17px 17px 10px",
+      marginBottom: 15
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      letterSpacing: 2,
+      color: PC[phase],
+      marginBottom: 4,
+      textTransform: "uppercase",
+      fontWeight: "bold"
+    }
+  }, "Fase de ", phase), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: "rgba(255,255,255,0.32)",
+      marginBottom: 15,
+      fontStyle: "italic"
+    }
+  }, phase === "preparação" ? "Construção de bases — força, feridas, capacidade de cuidar." : phase === "jornada" ? "Travessia — transformação, aprofundamento, expressão." : "Integração — autoridade, discernimento, habitar o que foi aprendido."), ALL.filter(k => A[k].phase === phase).map(k => /*#__PURE__*/React.createElement(ScoreSlider, {
+    key: k,
+    label: A[k].name,
+    value: scores[k] || cfg.min,
+    min: cfg.min,
+    max: cfg.max,
+    color: A[k].color,
+    onChange: val => setScores(p => ({
+      ...p,
+      [k]: val
+    }))
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "rgba(255,255,255,0.25)",
+      marginTop: 5
+    }
+  }, "Soma: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: PC[phase]
+    }
+  }, ALL.filter(k => A[k].phase === phase).reduce((s, k) => s + (scores[k] || 0), 0))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setStep("format"),
+    style: {
+      flexShrink: 0,
+      padding: "14px 20px",
+      background: "transparent",
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 9,
+      color: "rgba(255,255,255,0.45)",
+      fontSize: 11.5,
+      fontFamily: "Georgia",
+      cursor: "pointer"
+    }
+  }, "\u2190 Formato"), /*#__PURE__*/React.createElement("button", {
+    onClick: compute,
+    style: {
+      flex: 1,
+      padding: "15px",
+      background: "linear-gradient(135deg,#C9A84C,#8B6914)",
+      border: "none",
+      borderRadius: 9,
+      color: "white",
+      fontSize: 13.5,
+      fontFamily: "Georgia",
+      letterSpacing: 2,
+      cursor: "pointer",
+      textTransform: "uppercase",
+      boxShadow: "0 4px 28px rgba(201,168,76,0.22)"
+    }
+  }, "\u25C8 Ver Interpreta\xE7\xE3o"))));
+
+  // ── TELA 3: RESULT ──────────────────────────────────────────────────────────
+  const an = analysis;
+  if (!an) return null;
+  const dimColors = [an.d.color + "AA", "rgba(200,130,130,0.8)", "rgba(255,255,255,0.4)", an.d.color + "88"];
+  const trioBodyText = an.trioDynamic.includes("A pergunta desse trio:") ? an.trioDynamic.split("A pergunta desse trio:")[0].trim() : an.trioDynamic;
+  return /*#__PURE__*/React.createElement("div", {
+    ref: resultRef,
+    style: {
+      minHeight: "100vh",
+      background: BG,
+      color: "white",
+      fontFamily: "Georgia",
+      paddingBottom: 70
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "linear-gradient(180deg,rgba(201,168,76,0.08),transparent)",
+      borderBottom: "1px solid rgba(201,168,76,0.13)",
+      padding: "24px 20px 18px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9.5,
+      letterSpacing: 3,
+      color: "rgba(201,168,76,0.45)",
+      marginBottom: 7,
+      textTransform: "uppercase"
+    }
+  }, "Mapa Arquet\xEDpico \xB7 IAP ", cfg.questions, "q"), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      margin: "0 0 12px",
+      fontSize: "clamp(18px,4vw,28px)",
+      color: "#C9A84C",
+      fontWeight: "normal"
+    }
+  }, "Sua Constela\xE7\xE3o"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: 7
+    }
+  }, /*#__PURE__*/React.createElement(Tag, {
+    arch: dom,
+    label: "Dominante"
+  }), /*#__PURE__*/React.createElement(Tag, {
+    arch: va,
+    label: "Muito ativo"
+  }), /*#__PURE__*/React.createElement(Tag, {
+    arch: ac,
+    label: "Ativo"
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 720,
+      margin: "0 auto",
+      padding: "18px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(0,0,0,0.38)",
+      border: "1px solid rgba(201,168,76,0.10)",
+      borderRadius: 13,
+      padding: "18px 10px 16px",
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement(Triangle, {
+    dom: dom,
+    va: va,
+    ac: ac
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 8px",
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      letterSpacing: 2,
+      color: "rgba(201,168,76,0.45)",
+      marginBottom: 10,
+      textTransform: "uppercase",
+      textAlign: "center"
+    }
+  }, "Energia por Fase"), /*#__PURE__*/React.createElement(PhaseBar, {
+    phases: an.phases
+  }))), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u25C8",
+    title: "O que seu resultado revela",
+    color: "#C9A84C",
+    accent: true
+  }, /*#__PURE__*/React.createElement(P, null, an.opening)), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u25CE",
+    title: "A distribui\xE7\xE3o da energia",
+    color: "#8B9E7B"
+  }, /*#__PURE__*/React.createElement(P, null, an.phaseBalance)), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u25B2",
+    title: "A energia que organiza tudo — " + an.d.name,
+    color: an.d.color,
+    accent: true
+  }, an.dominantDeep.map((dim, i) => /*#__PURE__*/React.createElement(DimBox, {
+    key: i,
+    label: dim.label,
+    text: dim.text,
+    borderColor: dimColors[i]
+  }))), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u27E1",
+    title: "Como as tr\xEAs energias trabalham juntas",
+    color: "#C9A84C"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 7,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement(Tag, {
+    arch: dom
+  }), /*#__PURE__*/React.createElement(Tag, {
+    arch: va
+  }), /*#__PURE__*/React.createElement(Tag, {
+    arch: ac
+  })), /*#__PURE__*/React.createElement(P, null, trioBodyText), an.trioQuestion && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(201,168,76,0.06)",
+      border: "1px solid rgba(201,168,76,0.2)",
+      borderRadius: 7,
+      padding: "13px 16px",
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "rgba(201,168,76,0.55)",
+      fontSize: 9,
+      letterSpacing: 1.5,
+      marginBottom: 6,
+      textTransform: "uppercase"
+    }
+  }, "A pergunta desse trio"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      color: "rgba(255,255,255,0.90)",
+      fontSize: 13.5,
+      lineHeight: 1.78,
+      fontFamily: "Georgia",
+      fontStyle: "italic"
+    }
+  }, an.trioQuestion))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 13,
+      marginBottom: 14
+    }
+  }, [[an.v, va, "Muito ativo"], [an.a, ac, "Ativo"]].map(([arch, key, lbl]) => /*#__PURE__*/React.createElement("div", {
+    key: key,
+    className: "card-block",
+    style: {
+      background: "rgba(255,255,255,0.025)",
+      border: "1px solid " + arch.color + "35",
+      borderTop: "2px solid " + arch.color,
+      borderRadius: 9,
+      padding: "16px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "rgba(255,255,255,0.32)",
+      fontSize: 8,
+      letterSpacing: 1,
+      marginBottom: 5,
+      textTransform: "uppercase"
+    }
+  }, lbl), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: arch.color,
+      fontSize: 14.5,
+      fontFamily: "Georgia",
+      fontWeight: "bold",
+      marginBottom: 9
+    }
+  }, arch.name), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 10px",
+      color: "rgba(255,255,255,0.76)",
+      fontSize: 12.5,
+      lineHeight: 1.72,
+      fontFamily: "Georgia"
+    }
+  }, arch.core), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: "1px solid rgba(255,255,255,0.06)",
+      paddingTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "rgba(200,130,130,0.7)",
+      fontSize: 8.5,
+      letterSpacing: 1,
+      marginBottom: 5,
+      textTransform: "uppercase"
+    }
+  }, "Quando em piloto autom\xE1tico"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px",
+      color: "rgba(255,160,140,0.72)",
+      fontSize: 12,
+      lineHeight: 1.68,
+      fontFamily: "Georgia",
+      fontStyle: "italic"
+    }
+  }, arch.shadow), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: arch.color + "88",
+      fontSize: 8.5,
+      letterSpacing: 1,
+      marginBottom: 5,
+      textTransform: "uppercase"
+    }
+  }, "O convite"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      color: arch.color + "CC",
+      fontSize: 12,
+      lineHeight: 1.68,
+      fontFamily: "Georgia"
+    }
+  }, arch.integration))))), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u2261",
+    title: "Todas as pontua\xE7\xF5es",
+    color: "#6B7B8B"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 5
+    }
+  }, [...ALL].sort((a, b) => scores[b] - scores[a]).map((k, i) => {
+    const arch = A[k],
+      faixa = getFaixa(scores[k], cfg.max),
+      isTop3 = i < 3,
+      isL = k === least;
+    return /*#__PURE__*/React.createElement("div", {
+      key: k,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "7px 11px",
+        borderRadius: 6,
+        background: isTop3 ? arch.color + "15" : isL ? "rgba(160,112,112,0.08)" : "rgba(255,255,255,0.02)",
+        border: isTop3 ? "1px solid " + arch.color + "35" : isL ? "1px solid rgba(160,112,112,0.2)" : "1px solid transparent"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 8,
+        height: 8,
+        borderRadius: "50%",
+        background: arch.color,
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        color: isTop3 ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.45)",
+        fontSize: 12,
+        fontFamily: "Georgia"
+      }
+    }, arch.name), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: faixa.color,
+        fontSize: 9,
+        marginRight: 4
+      }
+    }, faixa.label), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: isTop3 ? "#C9A84C" : "rgba(255,255,255,0.4)",
+        fontSize: 14,
+        fontWeight: "bold",
+        minWidth: 26,
+        textAlign: "right"
+      }
+    }, scores[k]));
+  }))), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u25CB",
+    title: "O que está esperando ser encontrado — " + an.l.name,
+    color: an.l.color
+  }, /*#__PURE__*/React.createElement(P, null, an.leastNarrative), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: an.l.color + "10",
+      border: "1px solid " + an.l.color + "28",
+      borderRadius: 7,
+      padding: "12px 14px",
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: an.l.color + "88",
+      fontSize: 8.5,
+      letterSpacing: 1,
+      marginBottom: 5,
+      textTransform: "uppercase"
+    }
+  }, "O que fica dispon\xEDvel"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      color: "rgba(255,255,255,0.80)",
+      fontSize: 12.5,
+      lineHeight: 1.75,
+      fontFamily: "Georgia"
+    }
+  }, an.l.core))), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u25C7",
+    title: "Para onde esse mapa aponta",
+    color: "#7B9E87",
+    accent: true
+  }, /*#__PURE__*/React.createElement(P, null, an.integrationPath)), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u25C6",
+    title: "Reflex\xF5es terap\xEAuticas",
+    color: "#9B7DC4",
+    accent: true
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.48)",
+      fontSize: 13,
+      fontFamily: "Georgia",
+      fontStyle: "italic",
+      marginBottom: 18,
+      lineHeight: 1.72
+    }
+  }, "Cada pergunta parte de algo que voc\xEA provavelmente j\xE1 sente. N\xE3o precisam ser respondidas agora \u2014 algumas levam dias para come\xE7ar a trabalhar."), an.reflections.map((q, i) => /*#__PURE__*/React.createElement(Reflection, {
+    key: i,
+    text: q
+  }))), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u2192",
+    title: "Pr\xE1ticas para esta semana",
+    color: "#7B9E87"
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.48)",
+      fontSize: 13,
+      fontFamily: "Georgia",
+      fontStyle: "italic",
+      marginBottom: 16,
+      lineHeight: 1.72
+    }
+  }, "Gestos pequenos e concretos. N\xE3o exigem mudan\xE7a de vida \u2014 exigem aten\xE7\xE3o."), an.practices.map((p, i) => /*#__PURE__*/React.createElement(Practice, {
+    key: i,
+    text: p
+  }))), /*#__PURE__*/React.createElement(Card, {
+    icon: "\u2726",
+    title: "O que essa configura\xE7\xE3o tem a oferecer",
+    color: "#C9A84C"
+  }, /*#__PURE__*/React.createElement(P, null, "Quando " + an.d.name + ", " + an.v.name + " e " + an.a.name + " estão a serviço do que você genuinamente quer — não de um padrão antigo — elas criam uma presença específica no mundo."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(201,168,76,0.07)",
+      border: "1px solid rgba(201,168,76,0.24)",
+      borderRadius: 9,
+      padding: "17px 20px",
+      margin: "12px 0 14px",
+      borderLeft: "3px solid #C9A84C"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      color: "rgba(255,255,255,0.90)",
+      fontSize: 14,
+      lineHeight: 1.88,
+      fontFamily: "Georgia",
+      fontStyle: "italic"
+    }
+  }, an.d.core + " " + an.v.core.charAt(0).toLowerCase() + an.v.core.slice(1) + " " + an.a.core.charAt(0).toLowerCase() + an.a.core.slice(1))), /*#__PURE__*/React.createElement(P, {
+    style: {
+      fontSize: 12.5,
+      color: "rgba(255,255,255,0.45)"
+    }
+  }, "Isso n\xE3o \xE9 o que voc\xEA j\xE1 \xE9 \u2014 \xE9 uma dire\xE7\xE3o. O que existe em voc\xEA que, quando consciente, pode ser colocado a servi\xE7o de algo maior."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "rgba(201,168,76,0.55)",
+      marginBottom: 10,
+      fontFamily: "Georgia"
+    }
+  }, "Espa\xE7o para escrever com suas pr\xF3prias palavras:"), [0, 1, 2].map(i => /*#__PURE__*/React.createElement("p", {
+    key: i,
+    style: {
+      margin: "0 0 12px",
+      fontFamily: "Georgia",
+      fontSize: 13.5,
+      color: "rgba(255,255,255,0.08)",
+      letterSpacing: 1,
+      borderBottom: "1px solid rgba(255,255,255,0.06)",
+      paddingBottom: 4
+    }
+  }, "_".repeat(72))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "24px 0 0",
+      borderTop: "1px solid rgba(201,168,76,0.09)",
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.22)",
+      fontSize: 12.5,
+      lineHeight: 1.80,
+      fontFamily: "Georgia",
+      fontStyle: "italic",
+      maxWidth: 480,
+      margin: "0 auto 16px"
+    }
+  }, "Este resultado \xE9 um ponto de partida \u2014 n\xE3o uma defini\xE7\xE3o. Use o que ressoou; deixe ir o que n\xE3o se encaixa."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(201,168,76,0.32)",
+      fontSize: 10,
+      letterSpacing: 1.5,
+      margin: "0 0 22px"
+    }
+  }, "MAPA ARQUET\xCDPICO \xB7 PATRICIA FACCIO \xB7 PRISMA")), /*#__PURE__*/React.createElement("div", {
+    className: "no-print",
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: savePDF,
+    style: {
+      width: "100%",
+      padding: "15px",
+      background: "linear-gradient(135deg,rgba(201,168,76,0.15),rgba(139,105,20,0.15))",
+      border: "1px solid rgba(201,168,76,0.45)",
+      borderRadius: 9,
+      color: "#C9A84C",
+      fontSize: 13,
+      fontFamily: "Georgia",
+      letterSpacing: 1.5,
+      cursor: "pointer",
+      textTransform: "uppercase"
+    }
+  }, "\u2193 Salvar como PDF"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setStep("input");
+      setAn(null);
+    },
+    style: {
+      flex: 1,
+      padding: "13px",
+      background: "transparent",
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 9,
+      color: "rgba(255,255,255,0.45)",
+      fontSize: 12,
+      fontFamily: "Georgia",
+      cursor: "pointer"
+    }
+  }, "\u2190 Ajustar pontua\xE7\xF5es"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setStep("format");
+      setFormat(null);
+      setAn(null);
+    },
+    style: {
+      flex: 1,
+      padding: "13px",
+      background: "transparent",
+      border: "1px solid rgba(201,168,76,0.28)",
+      borderRadius: 9,
+      color: "rgba(201,168,76,0.65)",
+      fontSize: 12,
+      fontFamily: "Georgia",
+      cursor: "pointer",
+      letterSpacing: 1
+    }
+  }, "\u25C8 Nova interpreta\xE7\xE3o")))));
+}
+
+// Mount
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+</script>
+</body>
+</html>
